@@ -14,6 +14,9 @@ import (
 	"time"
 
 	metrics "github.com/rcrowley/go-metrics"
+	config "gopkg.in/jcmturner/gokrb5.v7/config"
+	keytab "gopkg.in/jcmturner/gokrb5.v7/keytab"
+	client "gopkg.in/jcmturner/gokrb5.v7/client"
 )
 
 // Broker represents a single Kafka broker connection. All operations on this object are entirely concurrency-safe.
@@ -61,6 +64,8 @@ const (
 	SASLTypeSCRAMSHA256 = "SCRAM-SHA-256"
 	// SASLTypeSCRAMSHA512 represents the SCRAM-SHA-512 mechanism.
 	SASLTypeSCRAMSHA512 = "SCRAM-SHA-512"
+	// SASLTypeGSSAPI represents the GSSAPI mechanism
+	SASLTypeGSSAPI = "GSSAPI"
 	// SASLHandshakeV0 is v0 of the Kafka SASL handshake protocol. Client and
 	// server negotiate SASL auth using opaque packets.
 	SASLHandshakeV0 = int16(0)
@@ -844,6 +849,8 @@ func (b *Broker) authenticateViaSASL() error {
 		return b.sendAndReceiveSASLOAuth(b.conf.Net.SASL.TokenProvider)
 	case SASLTypeSCRAMSHA256, SASLTypeSCRAMSHA512:
 		return b.sendAndReceiveSASLSCRAMv1()
+	case SASLTypeGSSAPI:
+		return b.sendAndReceiveSASLGSSAPI()
 	default:
 		return b.sendAndReceiveSASLPlainAuth()
 	}
@@ -1091,6 +1098,63 @@ func (b *Broker) sendAndReceiveSASLSCRAMv1() error {
 	}
 
 	Logger.Println("SASL authentication succeeded")
+	return nil
+}
+
+func (b *Broker) sendAndReceiveSASLGSSAPI() error {
+	if err := b.sendAndReceiveSASLHandshake(SASLTypeGSSAPI, SASLHandshakeV1); err != nil {
+		return err
+	}
+
+	cfg, err := config.Load(b.conf.Net.SASL.Krb5)
+	if err != nil {
+		Logger.Println("Loading krb5.conf failed", err)
+		return err
+	}
+
+	if !b.conf.Net.SASL.Keytab == "" {
+		kt, err := keytab.Load(b.conf.Net.SASL.Keytab)
+		if err != nil {
+			Logger.Println("Loading keytab file failed", err)
+			return err
+		}
+	}
+
+	realmName = config.ResolveRealm(cfg)
+
+	if !b.conf.net.SASL.Keytab == "" {
+		cl := client.NewClientWithKeytab(b.conf.Net.SASL.User, realmName, kt, cfg)
+	} else {
+		cl := client.NewClientWithPassword(b.conf.Net.SASL.User, realmName, b.conf.Net.SASL.Password, cfg)
+	}
+
+	err := cl.Login()
+
+	if err != nil {
+		Logger.Println("Kerberos login failed", err)
+		return err
+	}
+
+	correlationID := b.correlationID
+	requestTime := time.Now()
+	bytesWritten, err := b.sendSASLPlainAuthClientResponse(correlationID)
+
+	if err != nil {
+		Logger.Printf("Failed to write SASL auth header to broker %s: %s\n", b.addr, err.Error())
+		return err
+	}
+
+	b.updateOutgoingCommunicationMetrics(bytesWritten)
+	b.correlationID++
+	bytesRead, err := b.receiveSASLServerResponse(correlationID)
+	// With v1 sasl we get an error message set in the response we can return
+	if err != nil {
+		Logger.Printf("Error returned from broker during SASL flow %s: %s\n", b.addr, err.Error())
+		return err
+	}
+
+	b.updateIncomingCommunicationMetrics(bytesRead, time.Since(requestTime))
+
 	return nil
 }
 

@@ -56,15 +56,21 @@ type Config struct {
 			// (defaults to false).
 			Enable bool
 			// SASLMechanism is the name of the enabled SASL mechanism.
-			// Possible values: OAUTHBEARER, PLAIN (defaults to PLAIN).
+			// Possible values: GSSAPI, OAUTHBEARER, PLAIN (defaults to PLAIN).
 			Mechanism SASLMechanism
 			// Whether or not to send the Kafka SASL handshake first if enabled
 			// (defaults to true). You should only set this to false if you're using
 			// a non-Kafka SASL proxy.
 			Handshake bool
-			//username and password for SASL/PLAIN  or SASL/SCRAM authentication
+			// username and password for SASL/PLAIN  or SASL/SCRAM authentication
 			User     string
 			Password string
+			// Path to keytab file for GSSAPI. Mutually exclusive with Password
+			Keytab string
+			// Service name for GSSAPI Mechanism
+			Service string // "service/host" format
+			// Path to krb5.conf for GSSAPI Mechanism
+			Krb5 string
 			// authz id used for SASL/SCRAM authentication
 			SCRAMAuthzID string
 			// SCRAMClientGeneratorFunc is a generator of a user provided implementation of a SCRAM
@@ -450,6 +456,12 @@ func (c *Config) Validate() error {
 		if c.Net.SASL.Password != "" {
 			Logger.Println("Net.SASL is disabled but a non-empty password was provided.")
 		}
+		if c.Net.SASL.Mechanism != "" {
+			Logger.Println("Net.SASL is disabled but a non-empty mechanism was provided.")
+		}
+		if c.Net.SASL.Service != "" {
+			Logger.Println("Net.SASL is disabled but a non-empty service was provided.")
+		}
 	}
 	if c.Producer.RequiredAcks > 1 {
 		Logger.Println("Producer.RequiredAcks > 1 is deprecated and will raise an exception with kafka >= 0.8.2.0.")
@@ -527,9 +539,23 @@ func (c *Config) Validate() error {
 			if c.Net.SASL.SCRAMClientGeneratorFunc == nil {
 				return ConfigurationError("A SCRAMClientGeneratorFunc function must be provided to Net.SASL.SCRAMClientGeneratorFunc")
 			}
+		case SASLTypeGSSAPI:
+			if c.Net.SASL.User == "" {
+				return ConfigurationError("Net.SASL.User must not be empty when SASL/GSSAPI is enabled")
+			}
+			if c.Net.SASL.Krb5 == "" {
+				return ConfigurationError("Net.SASL.Krb5 must not be empty when SASL/GSSAPI is enabled")
+			}
+			if c.Net.SASL.Password == "" && c.Net.SASL.Keytab == "" {
+				return ConfigurationError("One of Net.SASL.Keytab or Net.SASL.Password must not be empty when SASL/GSSAPI is enabled")
+			}
+			if c.Net.SASL.Service == "" {
+				return ConfigurationError("Net.SASL.Service must not be empty when SASL/GSSAPI is enabled")
+			}
 		default:
 			msg := fmt.Sprintf("The SASL mechanism configuration is invalid. Possible values are `%s`, `%s`, `%s` and `%s`",
-				SASLTypeOAuth, SASLTypePlaintext, SASLTypeSCRAMSHA256, SASLTypeSCRAMSHA512)
+				SASLTypeOAuth, SASLTypePlaintext, SASLTypeSCRAMSHA256, SASLTypeSCRAMSHA512, SASLTypeGSSAPI
+			)
 			return ConfigurationError(msg)
 		}
 	}
