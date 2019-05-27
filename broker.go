@@ -1156,7 +1156,7 @@ func (b *Broker) sendAndReceiveSASLGSSAPI() error {
 		return err
 	}
 
-	bytesWritten, err := b.sendSaslAuthenticateRequest(correlationID, []byte(service_ticket))
+	bytesWritten, err := b.sendSaslAuthenticateRequest(correlationID, service_ticket)
 	if err != nil {
 		Logger.Printf("Failed to write SASL auth header to broker %s: %s\n", b.addr, err.Error())
 		return err
@@ -1171,13 +1171,7 @@ func (b *Broker) sendAndReceiveSASLGSSAPI() error {
 		return err
 	}
 
-	bytesRead, err := b.receiveSASLServerResponse(correlationID)
-	if err != nil {
-		Logger.Printf("Error returned from broker during SASL flow %s: %s\n", b.addr, err.Error())
-		return err
-	}
-
-	b.updateIncomingCommunicationMetrics(bytesRead, time.Since(requestTime))
+	b.updateIncomingCommunicationMetrics(len(challenge), time.Since(requestTime))
 
 	return nil
 }
