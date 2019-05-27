@@ -571,7 +571,7 @@ func (c *Config) Validate() error {
 				return ConfigurationError("Net.SASL.Service must not be empty when SASL/GSSAPI is enabled")
 			}
 		default:
-			msg := fmt.Sprintf("The SASL mechanism configuration is invalid. Possible values are `%s`, `%s`, `%s` and `%s`",
+			msg := fmt.Sprintf("The SASL mechanism configuration is invalid. Possible values are `%s`, `%s`, `%s`, `%s`, and `%s`",
 				SASLTypeOAuth, SASLTypePlaintext, SASLTypeSCRAMSHA256, SASLTypeSCRAMSHA512, SASLTypeGSSAPI)
 			return ConfigurationError(msg)
 		}
