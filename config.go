@@ -64,9 +64,9 @@ type Config struct {
 			Handshake bool
 			// username and password for SASL/PLAIN, SASL/SCRAM, or SASL/GSSAPI authentication
 			User     string
-			// Do not provide Password if providng a keytab
+			// Do not provide Password if providng a keytab for GSSAPI
 			Password string
-			// Path to keytab file for GSSAPI. Mutually exclusive with Password
+			// Path to keytab file for GSSAPI. Do not provide if provinding a password
 			Keytab string
 			// Service name for GSSAPI Mechanism
 			Service string
