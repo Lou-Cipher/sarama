@@ -14,9 +14,9 @@ import (
 	"time"
 
 	metrics "github.com/rcrowley/go-metrics"
-	config "gopkg.in/jcmturner/gokrb5.v7/config"
-	keytab "gopkg.in/jcmturner/gokrb5.v7/keytab"
-	client "gopkg.in/jcmturner/gokrb5.v7/client"
+	krb5_config "gopkg.in/jcmturner/gokrb5.v7/config"
+	krb5_keytab "gopkg.in/jcmturner/gokrb5.v7/keytab"
+	krb5_client "gopkg.in/jcmturner/gokrb5.v7/client"
 )
 
 // Broker represents a single Kafka broker connection. All operations on this object are entirely concurrency-safe.
@@ -1106,31 +1106,27 @@ func (b *Broker) sendAndReceiveSASLGSSAPI() error {
 		return err
 	}
 
-	cfg, err := config.Load(b.conf.Net.SASL.Krb5)
+	cfg, err := krb5_config.Load(b.conf.Net.SASL.Krb5)
 	if err != nil {
 		Logger.Println("Loading krb5.conf failed", err)
 		return err
 	}
 
-	if !b.conf.Net.SASL.Keytab == "" {
-		kt, err := keytab.Load(b.conf.Net.SASL.Keytab)
+	realmName := cfg.ResolveRealm(b.conf.Net.SASL.Realm)
+	var cl *krb5_client.Client
+
+	if b.conf.Net.SASL.Keytab != "" {
+		kt, err := krb5_keytab.Load(b.conf.Net.SASL.Keytab)
 		if err != nil {
 			Logger.Println("Loading keytab file failed", err)
 			return err
 		}
-	}
-
-	realmName = config.ResolveRealm(cfg)
-
-	if !b.conf.net.SASL.Keytab == "" {
-		cl := client.NewClientWithKeytab(b.conf.Net.SASL.User, realmName, kt, cfg)
+		cl = krb5_client.NewClientWithKeytab(b.conf.Net.SASL.User, realmName, kt, cfg)
 	} else {
-		cl := client.NewClientWithPassword(b.conf.Net.SASL.User, realmName, b.conf.Net.SASL.Password, cfg)
+		cl = krb5_client.NewClientWithPassword(b.conf.Net.SASL.User, realmName, b.conf.Net.SASL.Password, cfg)
 	}
 
-	err := cl.Login()
-
-	if err != nil {
+	if err := cl.Login(); err != nil {
 		Logger.Println("Kerberos login failed", err)
 		return err
 	}

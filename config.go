@@ -71,6 +71,8 @@ type Config struct {
 			Service string // "service/host" format
 			// Path to krb5.conf for GSSAPI Mechanism
 			Krb5 string
+			// Realm name used for GSSAPI Mechanism
+			Realm string
 			// authz id used for SASL/SCRAM authentication
 			SCRAMAuthzID string
 			// SCRAMClientGeneratorFunc is a generator of a user provided implementation of a SCRAM
@@ -546,6 +548,9 @@ func (c *Config) Validate() error {
 			if c.Net.SASL.Krb5 == "" {
 				return ConfigurationError("Net.SASL.Krb5 must not be empty when SASL/GSSAPI is enabled")
 			}
+			if c.Net.SASL.Realm == "" {
+				return ConfigurationError("Net.SASL.Realm must not be empty when SASL/GSSAPI is enabled")
+			}
 			if c.Net.SASL.Password == "" && c.Net.SASL.Keytab == "" {
 				return ConfigurationError("One of Net.SASL.Keytab or Net.SASL.Password must not be empty when SASL/GSSAPI is enabled")
 			}
@@ -554,8 +559,7 @@ func (c *Config) Validate() error {
 			}
 		default:
 			msg := fmt.Sprintf("The SASL mechanism configuration is invalid. Possible values are `%s`, `%s`, `%s` and `%s`",
-				SASLTypeOAuth, SASLTypePlaintext, SASLTypeSCRAMSHA256, SASLTypeSCRAMSHA512, SASLTypeGSSAPI
-			)
+				SASLTypeOAuth, SASLTypePlaintext, SASLTypeSCRAMSHA256, SASLTypeSCRAMSHA512, SASLTypeGSSAPI)
 			return ConfigurationError(msg)
 		}
 	}
