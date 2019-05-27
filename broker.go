@@ -17,6 +17,9 @@ import (
 	krb5_config "gopkg.in/jcmturner/gokrb5.v7/config"
 	krb5_keytab "gopkg.in/jcmturner/gokrb5.v7/keytab"
 	krb5_client "gopkg.in/jcmturner/gokrb5.v7/client"
+	krb5_crypto "gopkg.in/jcmturner/gokrb5.v7/crypto"
+	krb5_messages "gopkg.in/jcmturner/gokrb5.v7/messages"
+	krb5_types "gopkg.in/jcmturner/gokrb5.v7/types"
 )
 
 // Broker represents a single Kafka broker connection. All operations on this object are entirely concurrency-safe.
@@ -1131,10 +1134,29 @@ func (b *Broker) sendAndReceiveSASLGSSAPI() error {
 		return err
 	}
 
+	service_elements := []string{b.conf.Net.SASL.Service, "/", b.addr}
+	service := strings.Join(service_elements, "")
+	tkt, key, err := cl.GetServiceTicket(service)
+
+	if err != nil {
+		Logger.Printf("Failed to get service ticket", err)
+		return err
+	}
+
+	auth, _ := krb5_types.NewAuthenticator(cl.Credentials.Realm(), cl.Credentials.CName())
+	etype, _ := krb5_crypto.GetEtype(key.KeyType)
+	auth.GenerateSeqNumberAndSubKey(key.KeyType, etype.GetKeyByteSize())
+	APReq, err := krb5_messages.NewAPReq(tkt, key, auth)
+
 	correlationID := b.correlationID
 	requestTime := time.Now()
-	bytesWritten, err := b.sendSASLPlainAuthClientResponse(correlationID)
+	service_ticket, err := APReq.Ticket.Marshal()
+	if err != nil {
+		Logger.Printf("Failed to get service ticket", err)
+		return err
+	}
 
+	bytesWritten, err := b.sendSaslAuthenticateRequest(correlationID, []byte(service_ticket))
 	if err != nil {
 		Logger.Printf("Failed to write SASL auth header to broker %s: %s\n", b.addr, err.Error())
 		return err
@@ -1142,8 +1164,14 @@ func (b *Broker) sendAndReceiveSASLGSSAPI() error {
 
 	b.updateOutgoingCommunicationMetrics(bytesWritten)
 	b.correlationID++
+	challenge, err := b.receiveSaslAuthenticateResponse(correlationID)
+
+	if err != nil {
+		Logger.Printf("Failed to read response while authenticating with SASL to broker %s: %s\n", b.addr, err.Error())
+		return err
+	}
+
 	bytesRead, err := b.receiveSASLServerResponse(correlationID)
-	// With v1 sasl we get an error message set in the response we can return
 	if err != nil {
 		Logger.Printf("Error returned from broker during SASL flow %s: %s\n", b.addr, err.Error())
 		return err

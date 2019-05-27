@@ -68,7 +68,7 @@ type Config struct {
 			// Path to keytab file for GSSAPI. Mutually exclusive with Password
 			Keytab string
 			// Service name for GSSAPI Mechanism
-			Service string // "service/host" format
+			Service string
 			// Path to krb5.conf for GSSAPI Mechanism
 			Krb5 string
 			// Realm name used for GSSAPI Mechanism
