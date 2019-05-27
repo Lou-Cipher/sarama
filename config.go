@@ -62,8 +62,9 @@ type Config struct {
 			// (defaults to true). You should only set this to false if you're using
 			// a non-Kafka SASL proxy.
 			Handshake bool
-			// username and password for SASL/PLAIN  or SASL/SCRAM authentication
+			// username and password for SASL/PLAIN, SASL/SCRAM, or SASL/GSSAPI authentication
 			User     string
+			// Do not provide Password if providng a keytab
 			Password string
 			// Path to keytab file for GSSAPI. Mutually exclusive with Password
 			Keytab string
@@ -464,6 +465,15 @@ func (c *Config) Validate() error {
 		if c.Net.SASL.Service != "" {
 			Logger.Println("Net.SASL is disabled but a non-empty service was provided.")
 		}
+		if c.Net.SASL.Krb5 != "" {
+			return ConfigurationError("Net.SASL is disabled but a non-empty krb5 path was provided.")
+		}
+		if c.Net.SASL.Realm != "" {
+			return ConfigurationError("Net.SASL is disabled but a non-empty realm was provided.")
+		}
+		if c.Net.SASL.Keytab != "" {
+			return ConfigurationError("Net.SASL is disabled but a non-empty keytab path was provided.")
+		}
 	}
 	if c.Producer.RequiredAcks > 1 {
 		Logger.Println("Producer.RequiredAcks > 1 is deprecated and will raise an exception with kafka >= 0.8.2.0.")
@@ -553,6 +563,9 @@ func (c *Config) Validate() error {
 			}
 			if c.Net.SASL.Password == "" && c.Net.SASL.Keytab == "" {
 				return ConfigurationError("One of Net.SASL.Keytab or Net.SASL.Password must not be empty when SASL/GSSAPI is enabled")
+			}
+			if c.Net.SASL.Password != "" && c.Net.SASL.Keytab != "" {
+				return ConfigurationError("Only one of Net.SASL.Keytab or Net.SASL.Password must be set when SASL/GSSAPI is enabled")
 			}
 			if c.Net.SASL.Service == "" {
 				return ConfigurationError("Net.SASL.Service must not be empty when SASL/GSSAPI is enabled")
