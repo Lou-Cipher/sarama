@@ -57,7 +57,7 @@ type Config struct {
 			Enable bool
 			// SASLMechanism is the name of the enabled SASL mechanism.
 			// Possible values: GSSAPI, OAUTHBEARER, PLAIN (defaults to PLAIN).
-			Mechanism SASLMechanism
+			Mechanism string
 			// Whether or not to send the Kafka SASL handshake first if enabled
 			// (defaults to true). You should only set this to false if you're using
 			// a non-Kafka SASL proxy.
